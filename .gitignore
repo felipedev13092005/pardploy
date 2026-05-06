@@ -8,30 +8,36 @@ dist/
 dist-ssr/
 *.local
 
+# --- Pardploy Data (SQLite & Persistent) ---
+# Ignoramos la base de datos local y archivos temporales de SQLite
+data/*
+!data/.gitkeep
+
 # --- Rust (Backend) ---
 backend/target/
-backend/Cargo.lock
-# Si usas herramientas de Rust específicas:
+# En aplicaciones finales se suele subir el lock, pero en desarrollo 
+# constante de orquestadores a veces se prefiere ignorar si cambias mucho de entorno.
+# Descomenta la siguiente línea si prefieres no subirlo:
+# backend/Cargo.lock
 backend/**/core
 backend/**/*.bk
 
-# --- Bun/Node (Frontend) ---
-frontend/node_modules/
-frontend/dist/
-frontend/.bash_history
-# Archivos de log de Bun/NPM
-frontend/bun.lockb
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
+# --- Bun/UI (Frontend en ui/web) ---
+ui/web/node_modules/
+ui/web/dist/
+ui/web/.bash_history
+ui/web/bun.lockb
+ui/web/npm-debug.log*
+ui/web/yarn-debug.log*
+ui/web/yarn-error.log*
 
-# --- IDEs ---
+# --- IDEs & Editors (Vim/Nvim/VSCode) ---
 .vscode/
 .idea/
 *.swp
 *.swo
 .zed/
+*~
 
 # --- Docker ---
-# Si en algún momento guardas data local de contenedores
 .docker/

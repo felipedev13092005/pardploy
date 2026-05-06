@@ -7,14 +7,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - target_cache:/app/backend/target
       - bun_cache:/root/.bun/install/cache
+      - ./data:/app/data 
     privileged: true
     ports:
-      - "8080:8080" # Axum
-      - "5173:5173" # Vite + Bun
+      - "8080:8080"
+      - "5173:5173"
     environment:
       - RUST_LOG=debug
-      - BUN_ENV=development
-    restart: unless-stopped
+      # Cambiado a una sola barra después de sqlite: y añadido el modo rwc
+      - DATABASE_URL=sqlite:/app/data/pardploy.db?mode=rwc
     stdin_open: true
     tty: true
 
