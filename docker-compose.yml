@@ -2,28 +2,19 @@ services:
   pardploy-dev:
     build: .
     container_name: pardploy_dev
-    # Mapeamos el directorio actual al contenedor para persistir los cambios
     volumes:
       - .:/app
-      # REGLA DE ORO: Mapear el socket para que Rust (Bollard) controle Docker
       - /var/run/docker.sock:/var/run/docker.sock
-      # Opcional: Cachear las carpetas de Rust y Bun para que no se borren al recrear el contenedor
       - target_cache:/app/backend/target
       - bun_cache:/root/.bun/install/cache
-    
-    # Necesario para que el contenedor tenga permisos de gestión de Docker
     privileged: true
-    
     ports:
-      - "8080:8080" # Backend (Axum)
-      - "5173:5173" # Frontend (Vite/Bun)
-    
-    # Variables de entorno útiles para desarrollo
+      - "8080:8080" # Axum
+      - "5173:5173" # Vite + Bun
     environment:
       - RUST_LOG=debug
       - BUN_ENV=development
-    
-    # Mantiene el contenedor encendido
+    restart: unless-stopped
     stdin_open: true
     tty: true
 
