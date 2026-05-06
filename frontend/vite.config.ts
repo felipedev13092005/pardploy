@@ -8,4 +8,16 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // Escuchar en todas las IPs para que Docker pueda mapear el puerto
+    host: '0.0.0.0',
+    port: 5173,
+    // Configuración necesaria para que el auto-refresh (HMR) funcione tras el proxy de Docker
+    watch: {
+      usePolling: true,
+    },
+    hmr: {
+      clientPort: 5173,
+    },
+  },
 })
