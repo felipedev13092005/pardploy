@@ -1,0 +1,37 @@
+# --- General ---
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+dist/
+dist-ssr/
+*.local
+
+# --- Rust (Backend) ---
+backend/target/
+backend/Cargo.lock
+# Si usas herramientas de Rust específicas:
+backend/**/core
+backend/**/*.bk
+
+# --- Bun/Node (Frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.bash_history
+# Archivos de log de Bun/NPM
+frontend/bun.lockb
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.zed/
+
+# --- Docker ---
+# Si en algún momento guardas data local de contenedores
+.docker/
