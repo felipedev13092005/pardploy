@@ -16,7 +16,6 @@
     "jsx": "react-jsx",
 
     /* Alias de importación */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
