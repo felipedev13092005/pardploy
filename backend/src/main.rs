@@ -8,6 +8,7 @@ pub mod db;
 pub mod models { pub mod UserModel; }
 pub mod handlers { pub mod AuthHandlers; }
 pub mod routes { pub mod AuthRoutes; }
+pub mod middlewares { pub mod auth_middleware; }
 
 #[tokio::main]
 async fn main() {
