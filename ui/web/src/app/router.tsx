@@ -3,6 +3,7 @@ import MainLayout from "./private/(MainLayout)/MainLayout";
 import PageDashboard from "./private/(MainLayout)/dashboard/PageDashboard";
 import { AuthGuard } from "@/shared/guards/AuthGuard";
 import MainProviders from "@/shared/providers/MainProviders";
+import PageLogin from "./public/PageLogin";
 
 export const router = createBrowserRouter([
   {
@@ -25,7 +26,7 @@ export const router = createBrowserRouter([
       {
         // Rutas Públicas
         path: "/login",
-        element: <div>Página de Login</div>,
+        element: <PageLogin />,
       },
       {
         path: "/test",

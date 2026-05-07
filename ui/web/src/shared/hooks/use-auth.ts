@@ -47,10 +47,10 @@ export const useSession = () => {
   });
 
   return {
-    user,
-    loading,
     caching,
-    session: isError ? false : loading || caching ? undefined : user ? true : false,
+    user,
+    loading: loading || caching, // Es loading si está consultando o refrescando en cache
+    session: isError ? false : (loading || caching) ? undefined : !!user,
     login: loginMutation.mutateAsync,
     register: registerMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
