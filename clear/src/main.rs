@@ -13,6 +13,26 @@ pub mod routes { pub mod AuthRoutes; }
 async fn main() {
     // 1. Cargar variables de entorno desde .env
     dotenvy::dotenv().ok(); 
+
+    // --- BLOQUE DE DEBUG PARA ENVS ---
+    println!("--- Verificando Variables de Entorno ---");
+    let envs = ["SERVER_PORT", "DATABASE_URL", "JWT_SECRET", "REFRESH_SECRET"];
+    for e in envs {
+        match env::var(e) {
+            Ok(val) => {
+                // Si es un secret, ocultamos el resto por seguridad
+                if e.contains("SECRET") {
+                    println!("✅ {}: {}***", e, &val[..2]); 
+                } else {
+                    println!("✅ {}: {}", e, val);
+                }
+            },
+            Err(_) => println!("❌ {}: NO ENCONTRADA", e),
+        }
+    }
+    println!("---------------------------------------");
+    // ---------------------------------
+
     // 2. Inicializar DB usando el módulo db
     let pool = db::connect().await;
     db::migrate(&pool).await;
