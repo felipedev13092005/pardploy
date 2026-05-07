@@ -4,6 +4,7 @@ import PageDashboard from "./private/(MainLayout)/dashboard/PageDashboard";
 import { AuthGuard } from "@/shared/guards/AuthGuard";
 import MainProviders from "@/shared/providers/MainProviders";
 import PageLogin from "./public/PageLogin";
+import PageRegister from "./public/PageRegister";
 
 export const router = createBrowserRouter([
   {
@@ -27,6 +28,11 @@ export const router = createBrowserRouter([
         // Rutas Públicas
         path: "/login",
         element: <PageLogin />,
+      },
+      {
+        // Rutas Públicas
+        path: "/register",
+        element: <PageRegister />,
       },
       {
         path: "/test",
