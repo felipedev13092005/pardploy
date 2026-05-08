@@ -1,23 +1,28 @@
-import { Outlet, Link } from "react-router";
+import { Outlet } from "react-router";
+import SidebarAdmin from "./components/SidebarAdmin";
+import { SidebarTrigger } from "@/shared/ui/components/ui/sidebar";
+import { BreadcrumbNav } from "./components/BreadcrumbNav";
+import { UserMenu } from "./components/UserMenu";
 
 export default function MainLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-100 text-slate-900">
-      {/* Sidebar con Tailwind */}
-      <aside className="w-64 bg-white border-r border-slate-200 p-6">
-        <h2 className="text-xl font-bold mb-6 text-blue-600">Mi App</h2>
-        <nav className="space-y-2">
-          <Link to="/" className="block p-2 hover:bg-slate-50 rounded">Dashboard</Link>
-          <Link to="/ajustes" className="block p-2 hover:bg-slate-50 rounded">Ajustes</Link>
-        </nav>
-      </aside>
+    <div className='flex h-screen w-screen overflow-hidden'>
+      <SidebarAdmin />
 
-      {/* Contenido Dinámico */}
-      <main className="flex-1 p-8">
-        <div className="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-sm">
-          <Outlet /> {/* <-- Aquí cae el contenido de PageDashboard */}
-        </div>
-      </main>
+      <div className='flex flex-col flex-1 overflow-hidden'>
+        <header className='flex items-center justify-between border-b px-4 h-14 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+          <div className='flex items-center gap-3'>
+            <SidebarTrigger />
+            <BreadcrumbNav />
+          </div>
+
+          <UserMenu />
+        </header>
+
+        <main className='flex-1 overflow-auto p-4'>
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
