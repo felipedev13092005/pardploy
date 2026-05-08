@@ -1,13 +1,29 @@
-import { ApiService } from "./api-service";
-
 export const AuthService = {
-  me: () => ApiService.get('/auth/me'),
+  me: () => globalThis.fetch('/auth/me', {
+    credentials: 'include',
+  }),
   login: (username: string, password: string) =>
-    ApiService.post('/auth/login', { username, password }),
+    globalThis.fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    }),
   register: (username: string, password: string) =>
-    ApiService.post('/auth/register', { username, password }),
+    globalThis.fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    }),
   logout: () =>
-    ApiService.post('/auth/logout', {}),
+    globalThis.fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    }),
   refresh: () =>
-    ApiService.post('/auth/refresh', {}),
+    globalThis.fetch('/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    }),
 };
