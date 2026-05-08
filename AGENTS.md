@@ -46,7 +46,25 @@ This document defines the golden rules and technical standards for any AI agent 
 * **Location:** `ui/web/e2e/` for E2E tests
 * **Coverage:** Critical user flows (auth, navigation) must have E2E tests
 
-## 6. Directory Structure
+## 7. Security Standards
+
+### Backend (Rust)
+- **Input Validation:** Use libraries like `validator` or `serde` to validate all incoming data. Never trust user input directly.
+- **SQL Injection:** Use parameterized queries via SQLx. Never concatenate strings into SQL queries.
+- **Rate Limiting:** Implement rate limiting on public endpoints to prevent abuse.
+- **Security Headers:** Use `tower-http` middleware for CORS, CSP, HSTS, and other security headers.
+- **Secrets:** Never hardcode secrets. Use environment variables and `.env` files (already in `.gitignore`).
+
+### Frontend (React 19)
+- **XSS Prevention:** Never use `dangerouslySetInnerHTML` unless absolutely necessary. Sanitize any user-generated content.
+- **API Keys:** Never expose API keys or sensitive data in client-side code.
+- **Authentication:** Store tokens securely (httpOnly cookies preferred over localStorage).
+
+### General
+- **Dependencies:** Regularly audit dependencies (`cargo audit`, `npm audit`) for vulnerabilities.
+- **Logging:** Log security events (failed auth attempts, suspicious requests) but never log sensitive data (passwords, tokens).
+
+## 8. Directory Structure
 ```text
 /backend
   ├── src/
