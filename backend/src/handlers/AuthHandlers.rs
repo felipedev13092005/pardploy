@@ -52,7 +52,7 @@ fn create_token(user_id: i32, username: &str, secret: &[u8], seconds_to_exp: u64
 pub async fn register(
     State(pool): State<SqlitePool>,
     Json(payload): Json<AuthPayload>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     payload.validate().map_err(|e| (StatusCode::BAD_REQUEST, format!("Validación: {}", e)))?;
 
     let hashed = hash(&payload.password, DEFAULT_COST)
@@ -60,7 +60,7 @@ pub async fn register(
 
     let new_user = User {
         id: None,
-        username: payload.username,
+        username: payload.username.clone(),
         password_hash: hashed,
         is_admin: false,
     };
@@ -68,14 +68,17 @@ pub async fn register(
     User::create(&pool, new_user).await
         .map_err(|_| (StatusCode::CONFLICT, "El nombre de usuario ya está en uso".into()))?;
 
-    Ok(StatusCode::CREATED)
+    Ok((
+        StatusCode::CREATED, 
+        Json(serde_json::json!({ "message": "Usuario registrado exitosamente", "username": payload.username }))
+    ))
 }
 
 pub async fn login(
     State(pool): State<SqlitePool>,
     jar: CookieJar,
     Json(payload): Json<AuthPayload>,
-) -> Result<(CookieJar, StatusCode), (StatusCode, String)> {
+) -> Result<(CookieJar, Json<serde_json::Value>), (StatusCode, String)> {
     let user = User::find_by_username(&pool, &payload.username).await
         .map_err(|_| (StatusCode::UNAUTHORIZED, "Usuario o contraseña incorrectos".into()))?;
 
@@ -85,7 +88,6 @@ pub async fn login(
 
     let user_id = user.id.unwrap_or(0);
     
-    // Pasamos el username al token
     let access_token = create_token(user_id, &user.username, &get_jwt_secret(), 900);
     let refresh_token = create_token(user_id, &user.username, &get_refresh_secret(), 604800);
 
@@ -101,7 +103,19 @@ pub async fn login(
         .same_site(SameSite::Lax)
         .build();
 
-    Ok((jar.add(access_cookie).add(refresh_cookie), StatusCode::OK))
+    // Actualizamos el jar y devolvemos el JSON
+    let new_jar = jar.add(access_cookie).add(refresh_cookie);
+    
+    Ok((
+        new_jar, 
+        Json(serde_json::json!({
+            "message": "Login exitoso",
+            "user": {
+                "id": user_id,
+                "username": user.username
+            }
+        }))
+    ))
 }
 
 // Ejemplo de cómo usar los datos en el endpoint 'me'
