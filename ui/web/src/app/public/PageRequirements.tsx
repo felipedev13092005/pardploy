@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { SystemService } from "@/shared/utils/system"
-import type { SystemRequirementsResponse } from "@/shared/types/system"
+import type { SystemRequirementsResponse, InstallStep } from "@/shared/types/system"
 import { Button } from "@/shared/ui/components/ui/button"
 import {
   Card,
@@ -23,6 +23,8 @@ import {
   Cpu,
   Network,
   Database,
+  Loader2,
+  Settings,
 } from "lucide-react"
 
 interface RequirementItemProps {
@@ -74,6 +76,10 @@ const RequirementItem = ({
 const PageRequirements = () => {
   const navigate = useNavigate()
   const [hasCheckedOnce, setHasCheckedOnce] = useState(false)
+  const [installSteps, setInstallSteps] = useState<InstallStep[]>([])
+  const [isInstalling, setIsInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<
     SystemRequirementsResponse,
@@ -83,6 +89,30 @@ const PageRequirements = () => {
     queryFn: () => SystemService.getRequirements(),
     retry: false,
   })
+
+  const handleInstall = async () => {
+    setIsInstalling(true)
+    setInstallError(null)
+    setInstallSteps([])
+
+    try {
+      await SystemService.installDocker((step) => {
+        setInstallSteps((prev) => [...prev, step])
+      })
+    } catch (error) {
+      setInstallError(
+        error instanceof Error ? error.message : "Error desconocido"
+      )
+    } finally {
+      setIsInstalling(false)
+    }
+  }
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [installSteps])
 
   useEffect(() => {
     if (data && !hasCheckedOnce) {
@@ -260,20 +290,89 @@ const PageRequirements = () => {
           )}
         </CardContent>
 
-        <div className="p-6 pt-0">
-          <Button
-            className="w-full"
-            onClick={() => refetch()}
-            disabled={isLoading || isFetching}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
-            />
-            {isFetching ? "Verificando..." : "Verificar de nuevo"}
-          </Button>
+        <div className="p-6 pt-0 space-y-4">
+          {(isInstalling || installSteps.length > 0) && (
+            <div className="bg-zinc-950 rounded-lg p-4 font-mono text-sm">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-amber-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                </div>
+                <span className="text-zinc-500 text-xs ml-2">Terminal de instalación</span>
+                {isInstalling && (
+                  <span className="ml-auto text-xs text-blue-400 animate-pulse">
+                    Ejecutando...
+                  </span>
+                )}
+              </div>
 
-          {failedCount > 0 && (
-            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div
+                ref={scrollRef}
+                className="space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800"
+              >
+                {installSteps.map((step, index) => {
+                  const icon = {
+                    running: <Loader2 className="h-4 w-4 animate-spin text-blue-500" />,
+                    success: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+                    error: <XCircle className="h-4 w-4 text-red-500" />,
+                  }[step.status]
+
+                  const color = {
+                    running: "text-blue-400",
+                    success: "text-green-400",
+                    error: "text-red-400",
+                  }[step.status]
+
+                  return (
+                    <div key={index} className="flex items-start gap-2">
+                      {icon}
+                      <div className="flex-1">
+                        <span className={`${color} font-medium`}>{step.name}</span>
+                        <span className="text-zinc-500">: {step.message}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {installError && (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                Error en la instalación: {installError}
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              onClick={() => refetch()}
+              disabled={isLoading || isFetching || isInstalling}
+              variant="outline"
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
+              />
+              {isFetching ? "Verificando..." : "Verificar"}
+            </Button>
+
+            {(failedCount > 0 || !data) && !isInstalling && (
+              <Button
+                className="flex-1"
+                onClick={handleInstall}
+                disabled={isLoading || isFetching || isInstalling}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                {isInstalling ? "Instalando..." : "Instalar / Configurar"}
+              </Button>
+            )}
+          </div>
+
+          {failedCount > 0 && !isInstalling && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
               <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
                 ¿Necesitas ayuda para instalar los requisitos?
               </p>
