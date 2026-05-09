@@ -5,6 +5,10 @@ export interface UserAuth {
   username: string
 }
 
+export interface AuthStatus {
+  hasUsers: boolean
+}
+
 export const AuthService = {
   me: () => ApiService.get<UserAuth>('/auth/me'),
   login: (username: string, password: string) =>
@@ -13,4 +17,5 @@ export const AuthService = {
     ApiService.post<UserAuth>('/auth/register', { username, password }),
   logout: () => ApiService.post('/auth/logout'),
   refresh: () => ApiService.post('/auth/refresh'),
+  getStatus: () => ApiService.get<AuthStatus>('/auth/status'),
 }
