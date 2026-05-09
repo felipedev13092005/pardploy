@@ -1,50 +1,30 @@
 // ============================================================================
 // requirements.rs
-// Handler para verificar los requisitos del sistema antes de ejecutar Pardploy.
-//
-// Dependencias necesarias en Cargo.toml:
-//
-//   [dependencies]
-//   axum       = "0.7"
-//   tokio      = { version = "1", features = ["full"] }
-//   sqlx       = { version = "0.7", features = ["sqlite", "runtime-tokio"] }
-//   bollard    = "0.17"   # Cliente nativo del socket de Docker (sin shell)
-//   sysinfo    = "0.30"   # Memoria y disco sin comandos externos
-//   futures    = "0.3"    # Para join! y ejecutar checks en paralelo
+// Handler para verificar requisitos e instalar Docker via SSE.
 // ============================================================================
 
 use axum::{
     extract::State,
-    response::sse::{Event, Sse},
+    response::sse::{Event, KeepAlive, Sse},
     Json,
 };
 use bollard::Docker;
-// use futures::future::join_all;
 use futures::stream::Stream;
 use sysinfo::{Disks, System};
 use sqlx::SqlitePool;
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::models::SystemModel::{InstallStep, SystemRequirement, SystemRequirementsResponse};
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 
-/// Ruta estándar del socket Unix de Docker en Linux.
 const DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
-
-/// Memoria RAM mínima recomendada en GB.
 const MIN_MEMORY_GB: u64 = 2;
-
-/// Espacio libre en disco mínimo recomendado en GB (medido en /var/lib/docker).
 const MIN_DISK_GB: u64 = 10;
 
-// ── Helpers internos ─────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Devuelve un `SystemRequirement` de error genérico.
-/// Útil para reducir la repetición de structs con todos los campos en `None`.
 fn requirement_error(msg: impl Into<String>) -> SystemRequirement {
     SystemRequirement {
         installed: false,
@@ -61,13 +41,7 @@ fn requirement_error(msg: impl Into<String>) -> SystemRequirement {
 
 // ── Checks de Docker ─────────────────────────────────────────────────────────
 
-/// Verifica si Docker está instalado y si el socket está disponible.
-///
-/// Usa `bollard` para conectarse directamente al socket Unix en lugar de
-/// llamar a `docker --version` como proceso externo. Esto es más eficiente
-/// y no depende de que `docker` esté en el PATH del proceso servidor.
 async fn check_docker() -> SystemRequirement {
-    // Intentamos conectarnos al socket local de Docker.
     let docker = match Docker::connect_with_local_defaults() {
         Ok(d) => d,
         Err(e) => {
@@ -78,10 +52,8 @@ async fn check_docker() -> SystemRequirement {
         }
     };
 
-    // Pedimos la versión del daemon a través de la API REST del socket.
     match docker.version().await {
         Ok(info) => {
-            // `info.version` es Option<String> según el esquema de la API de Docker.
             let version_str = info.version.unwrap_or_else(|| "desconocida".to_string());
             SystemRequirement {
                 installed: true,
@@ -95,27 +67,20 @@ async fn check_docker() -> SystemRequirement {
                 error: None,
             }
         }
-        Err(e) => {
-            // El socket existe pero el daemon no responde correctamente.
-            SystemRequirement {
-                installed: true,
-                version: None,
-                ready: Some(false),
-                running: None,
-                socket: Some(DOCKER_SOCKET_PATH.to_string()),
-                available: None,
-                available_amount: None,
-                sufficient: None,
-                error: Some(format!("Docker instalado pero no responde: {}", e)),
-            }
-        }
+        Err(e) => SystemRequirement {
+            installed: true,
+            version: None,
+            ready: Some(false),
+            running: None,
+            socket: Some(DOCKER_SOCKET_PATH.to_string()),
+            available: None,
+            available_amount: None,
+            sufficient: None,
+            error: Some(format!("Docker instalado pero no responde: {}", e)),
+        },
     }
 }
 
-/// Verifica si el daemon de Docker está corriendo activamente.
-///
-/// Reutiliza la conexión de bollard para llamar a `docker info`, equivalente
-/// a `docker info` en CLI pero sin lanzar un proceso hijo.
 async fn check_docker_daemon() -> SystemRequirement {
     let docker = match Docker::connect_with_local_defaults() {
         Ok(d) => d,
@@ -150,17 +115,10 @@ async fn check_docker_daemon() -> SystemRequirement {
     }
 }
 
-/// Verifica si Docker Compose está disponible.
-///
-/// Prueba primero el plugin moderno (`docker compose`) y luego el binario
-/// legacy (`docker-compose`) como fallback.
-///
-/// NOTA: usamos `tokio::process::Command` (async) en lugar de
-/// `std::process::Command` (bloqueante) para no bloquear el hilo de Tokio.
 async fn check_compose() -> SystemRequirement {
-    // ── Intento 1: plugin moderno `docker compose version` ──────────────────
+    // Intento 1: plugin moderno `docker compose version`
     let modern = tokio::process::Command::new("docker")
-        .args(["compose", "version"]) // args() separa correctamente los argumentos
+        .args(["compose", "version"])
         .output()
         .await;
 
@@ -181,7 +139,7 @@ async fn check_compose() -> SystemRequirement {
         }
     }
 
-    // ── Intento 2: binario legacy `docker-compose --version` ────────────────
+    // Intento 2: binario legacy `docker-compose --version`
     let legacy = tokio::process::Command::new("docker-compose")
         .arg("--version")
         .output()
@@ -199,27 +157,21 @@ async fn check_compose() -> SystemRequirement {
                 available: None,
                 available_amount: None,
                 sufficient: None,
-                error: Some("Usando docker-compose legacy (considera actualizar al plugin)".to_string()),
+                error: Some(
+                    "Usando docker-compose legacy (considera actualizar al plugin)".to_string(),
+                ),
             };
         }
     }
 
-    // Ninguno disponible.
-    requirement_error("Docker Compose no está instalado (ni plugin moderno ni binario legacy)")
+    requirement_error(
+        "Docker Compose no está instalado (ni plugin moderno ni binario legacy)",
+    )
 }
 
 // ── Check de puertos ─────────────────────────────────────────────────────────
 
-/// Verifica si un puerto TCP está disponible intentando hacer bind en él.
-///
-/// Este método es más portable y preciso que parsear la salida de `ss` o
-/// `netstat`, y no requiere ninguna dependencia extra ni llamada al shell.
-///
-/// ⚠️ Limitación: el bind libera el puerto inmediatamente después del check,
-/// por lo que hay una pequeña ventana de tiempo (TOCTOU). Es suficiente para
-/// una verificación de prerequisitos de instalación.
 fn check_port(port: u16) -> SystemRequirement {
-    // TcpListener::bind falla si el puerto ya está en uso.
     let available = TcpListener::bind(("0.0.0.0", port)).is_ok();
 
     SystemRequirement {
@@ -239,25 +191,19 @@ fn check_port(port: u16) -> SystemRequirement {
     }
 }
 
-// ── Checks de recursos del sistema ───────────────────────────────────────────
+// ── Checks de recursos ───────────────────────────────────────────────────────
 
-/// Verifica la memoria RAM total disponible usando `sysinfo`.
-///
-/// `sysinfo` lee directamente `/proc/meminfo` en Linux (sin shell),
-/// y funciona también en macOS y Windows, lo que hace el código portable.
 fn check_memory() -> SystemRequirement {
     let mut sys = System::new();
-    sys.refresh_memory(); // Solo carga datos de memoria, más eficiente que new_all()
+    sys.refresh_memory();
 
-    // total_memory() devuelve bytes; convertimos a GB.
     let total_bytes = sys.total_memory();
 
     if total_bytes == 0 {
-        // sysinfo no pudo leer la memoria (raro, pero posible en entornos restrictivos).
         return requirement_error("No se pudo leer la memoria del sistema");
     }
 
-    let mem_gb = total_bytes / 1_073_741_824; // 1 GiB = 1024^3 bytes
+    let mem_gb = total_bytes / 1_073_741_824;
     let sufficient = mem_gb >= MIN_MEMORY_GB;
 
     SystemRequirement {
@@ -280,18 +226,8 @@ fn check_memory() -> SystemRequirement {
     }
 }
 
-/// Verifica el espacio libre en disco donde Docker almacena sus datos.
-///
-/// En lugar de parsear `df`, usa `sysinfo::Disks` que lee los puntos de
-/// montaje del sistema de archivos directamente.
-///
-/// Busca el disco que contenga `/var/lib/docker`; si no existe ese mountpoint
-/// específico, cae en `/` como fallback razonable.
 fn check_disk() -> SystemRequirement {
     let disks = Disks::new_with_refreshed_list();
-
-    // Buscamos el mountpoint más específico que contenga el path de Docker.
-    // Ordenamos por longitud de ruta descendente para preferir el más específico.
     let docker_path = std::path::Path::new("/var/lib/docker");
 
     let best_disk = disks
@@ -299,7 +235,6 @@ fn check_disk() -> SystemRequirement {
         .filter(|d| docker_path.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len());
 
-    // Fallback: si no existe /var/lib/docker como mountpoint propio, usamos /
     let disk = best_disk.or_else(|| {
         disks
             .iter()
@@ -336,30 +271,17 @@ fn check_disk() -> SystemRequirement {
     }
 }
 
-// ── Handler principal ─────────────────────────────────────────────────────────
+// ── Handler GET /requirements ─────────────────────────────────────────────────
 
-/// Handler Axum que ejecuta todos los checks en paralelo y devuelve el estado
-/// del sistema como JSON.
-///
-/// Todos los checks async se lanzan concurrentemente con `tokio::join!` para
-/// reducir la latencia total (antes eran secuenciales, ahora el tiempo total
-/// es el del check más lento, no la suma de todos).
-///
-/// Los checks síncronos (puerto, memoria, disco) son rápidos y se ejecutan
-/// directamente sin necesidad de `spawn_blocking` para este caso de uso.
 pub async fn get_requirements(
     State(_pool): State<SqlitePool>,
 ) -> Json<SystemRequirementsResponse> {
-
-    // Ejecutamos los 3 checks async de Docker en paralelo.
     let (docker, compose, daemon) = tokio::join!(
         check_docker(),
         check_compose(),
         check_docker_daemon(),
     );
 
-    // Los checks de puerto, memoria y disco son síncronos pero muy rápidos
-    // (solo leen /proc o intentan un bind), así que no necesitan spawn_blocking.
     let response = SystemRequirementsResponse {
         docker,
         compose,
@@ -373,71 +295,75 @@ pub async fn get_requirements(
     Json(response)
 }
 
-// ── Instalación de Docker ────────────────────────────────────────────────────
+// ── Instalación via SSE ───────────────────────────────────────────────────────
 
-fn run_command_with_output(
+/// Ejecuta un comando con `std::process::Command` (bloqueante, correcto dentro
+/// de `spawn_blocking`) y envía el resultado por el canal SSE.
+///
+/// IMPORTANTE: usamos `std::process::Command` y NO `tokio::process::Command`
+/// porque ya estamos dentro de `spawn_blocking`. Mezclar `tokio::process` con
+/// `Handle::block_on` desde un hilo externo puede causar deadlocks silenciosos.
+fn run_step(
+    name: &str,
     cmd: &str,
     args: &[&str],
-    output: &mpsc::Sender<InstallStep>,
+    tx: &mpsc::Sender<InstallStep>,
 ) -> bool {
-    let cmd_str = format!("{} {}", cmd, args.join(" "));
-
-    let output_clone = output.clone();
-    let _ = output_clone.blocking_send(InstallStep::running(
-        cmd_str.clone(),
-        format!("Ejecutando: {}", cmd_str),
+    // Notificamos que el paso está en marcha.
+    let _ = tx.blocking_send(InstallStep::running(
+        name,
+        format!("Ejecutando: {} {}", cmd, args.join(" ")),
     ));
 
-    let rt = tokio::runtime::Handle::current();
-    let result = rt.block_on(async {
-        tokio::process::Command::new(cmd)
-            .args(args)
-            .output()
-            .await
-    });
+    let result = std::process::Command::new(cmd)
+        .args(args)
+        .output();
 
     match result {
         Ok(out) => {
+            // Combinamos stdout + stderr para tener contexto completo.
             let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let detail = if !stdout.is_empty() { stdout } else { stderr };
 
             if out.status.success() {
-                let output_clone = output.clone();
-                let _ = output_clone.blocking_send(InstallStep::success(
-                    cmd_str.clone(),
-                    if stdout.is_empty() {
+                let _ = tx.blocking_send(InstallStep::success(
+                    name,
+                    if detail.is_empty() {
                         "Completado".to_string()
                     } else {
-                        stdout
+                        // Truncamos a 200 chars para no saturar el terminal.
+                        detail.chars().take(200).collect()
                     },
                 ));
                 true
             } else {
-                let output_clone = output.clone();
-                let _ = output_clone.blocking_send(InstallStep::error(
-                    cmd_str.clone(),
-                    if stderr.is_empty() {
+                let _ = tx.blocking_send(InstallStep::error(
+                    name,
+                    if detail.is_empty() {
                         format!("Falló con código: {:?}", out.status.code())
                     } else {
-                        stderr
+                        detail.chars().take(200).collect()
                     },
                 ));
                 false
             }
         }
         Err(e) => {
-            let output_clone = output.clone();
-            let _ = output_clone.blocking_send(InstallStep::error(
-                cmd_str.clone(),
-                format!("Error al ejecutar: {}", e),
+            let _ = tx.blocking_send(InstallStep::error(
+                name,
+                format!("No se pudo ejecutar '{}': {}", cmd, e),
             ));
             false
         }
     }
 }
 
-fn install_docker_steps(output: mpsc::Sender<InstallStep>) {
-    let _ = output.blocking_send(InstallStep::running(
+/// Ejecuta todos los pasos de instalación de forma secuencial dentro de
+/// `spawn_blocking`, enviando cada paso por `tx` para que el SSE lo retransmita.
+fn install_docker_steps(tx: mpsc::Sender<InstallStep>) {
+    // ── 1. Detectar SO ────────────────────────────────────────────────────────
+    let _ = tx.blocking_send(InstallStep::running(
         "detection",
         "Detectando sistema operativo...",
     ));
@@ -445,184 +371,208 @@ fn install_docker_steps(output: mpsc::Sender<InstallStep>) {
     let os_info = std::fs::read_to_string("/etc/os-release")
         .unwrap_or_default()
         .to_lowercase();
+    let is_debian = os_info.contains("ubuntu") || os_info.contains("debian");
 
-    let is_ubuntu = os_info.contains("ubuntu") || os_info.contains("debian");
-
-    let _ = output.blocking_send(InstallStep::success(
+    let _ = tx.blocking_send(InstallStep::success(
         "detection",
-        format!("Sistema detectado: {}", if is_ubuntu { "Ubuntu/Debian" } else { "CentOS/Fedora" }),
+        format!(
+            "Sistema: {}",
+            if is_debian { "Ubuntu/Debian" } else { "Otro (se usará el script oficial)" }
+        ),
     ));
 
-    // Check if already installed
-    let _ = output.blocking_send(InstallStep::running(
-        "check-docker",
-        "Verificando si Docker ya está instalado...",
-    ));
+    // ── 2. Verificar si Docker ya está instalado ──────────────────────────────
+    let docker_already = std::process::Command::new("docker")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
 
-    let docker_check = std::process::Command::new("which")
-        .arg("docker")
-        .output();
-
-    if docker_check.map(|o| o.status.success()).unwrap_or(false) {
-        let _ = output.blocking_send(InstallStep::success(
+    if docker_already {
+        let _ = tx.blocking_send(InstallStep::success(
             "check-docker",
             "Docker ya está instalado",
         ));
     } else {
-        let _ = output.blocking_send(InstallStep::running(
+        // ── 3a. Instalar Docker con el script oficial ─────────────────────────
+        // Este script funciona en Ubuntu, Debian, Fedora, CentOS, Raspberry Pi OS, etc.
+        let _ = tx.blocking_send(InstallStep::running(
             "install-docker",
-            "Instalando Docker (puede tomar varios minutos)...",
+            "Descargando e instalando Docker (puede tardar varios minutos)...",
         ));
 
-        // Try Docker's install script (works on most distros)
-        let script_result = std::process::Command::new("sh")
-            .arg("-c")
-            .arg("curl -fsSL https://get.docker.com | sh")
-            .output();
+        let script_ok = std::process::Command::new("sh")
+            .args(["-c", "curl -fsSL https://get.docker.com | sh"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
 
-        match script_result {
-            Ok(out) if out.status.success() => {
-                let _ = output.blocking_send(InstallStep::success(
-                    "install-docker",
-                    "Docker instalado correctamente",
-                ));
-            }
-            _ => {
-                // Fallback to package manager
-                let _ = output.blocking_send(InstallStep::running(
-                    "install-docker-fallback",
-                    "Intentando instalación por paquete...",
-                ));
-
-                let fallback_success = run_command_with_output(
-                    "apt-get",
-                    &["update", "-y"],
-                    &output,
-                );
-
-                if fallback_success {
-                    let _ = run_command_with_output(
-                        "apt-get",
-                        &["install", "-y", "docker.io"],
-                        &output,
-                    );
-                }
-            }
-        }
-    }
-
-    // Enable and start service
-    let _ = output.blocking_send(InstallStep::running(
-        "enable-docker",
-        "Habilitando servicio Docker...",
-    ));
-
-    run_command_with_output("systemctl", &["enable", "docker"], &output);
-
-    let _ = output.blocking_send(InstallStep::running(
-        "start-docker",
-        "Iniciando servicio Docker...",
-    ));
-
-    let start_ok = run_command_with_output("systemctl", &["start", "docker"], &output);
-
-    // Wait a moment for Docker to be ready
-    std::thread::sleep(std::time::Duration::from_secs(2));
-
-    // Verify installation
-    let _ = output.blocking_send(InstallStep::running(
-        "verify-docker",
-        "Verificando instalación de Docker...",
-    ));
-
-    let verify = std::process::Command::new("docker")
-        .arg("version")
-        .output();
-
-    if verify.map(|o| o.status.success()).unwrap_or(false) {
-        let _ = output.blocking_send(InstallStep::success(
-            "verify-docker",
-            "Docker instalado y funcionando correctamente",
-        ));
-    } else {
-        let _ = output.blocking_send(InstallStep::error(
-            "verify-docker",
-            "Docker no está respondiendo. Puede que necesite reiniciar el sistema.",
-        ));
-    }
-
-    // Install Docker Compose plugin
-    let _ = output.blocking_send(InstallStep::running(
-        "install-compose",
-        "Instalando Docker Compose plugin...",
-    ));
-
-    // Try apt-get first (Debian/Ubuntu)
-    let compose_install = std::process::Command::new("sh")
-        .arg("-c")
-        .arg("apt-get update -y && apt-get install -y docker-compose-plugin 2>/dev/null || echo 'apt-fallback'")
-        .output();
-
-    if let Ok(out) = compose_install {
-        if out.status.success() && String::from_utf8_lossy(&out.stdout).contains("docker-compose-plugin") {
-            let _ = output.blocking_send(InstallStep::success(
-                "install-compose",
-                "Docker Compose plugin instalado correctamente",
+        if script_ok {
+            let _ = tx.blocking_send(InstallStep::success(
+                "install-docker",
+                "Docker instalado correctamente via script oficial",
             ));
         } else {
-            // Fallback: manual installation
-            let _ = output.blocking_send(InstallStep::running(
-                "install-compose-manual",
-                "Instalando Docker Compose manualmente...",
+            // ── 3b. Fallback: apt-get ─────────────────────────────────────────
+            run_step("apt-update", "apt-get", &["update", "-y"], &tx);
+            run_step("apt-install-docker", "apt-get", &["install", "-y", "docker.io"], &tx);
+        }
+    }
+
+    // ── 4. Habilitar e iniciar el daemon ──────────────────────────────────────
+    // `--now` equivale a enable + start en un solo comando.
+    run_step("enable-docker", "systemctl", &["enable", "--now", "docker"], &tx);
+
+    // Esperamos 2 segundos para que el daemon arranque completamente.
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // ── 5. Verificar que Docker responde ──────────────────────────────────────
+    let docker_ok = run_step("verify-docker", "docker", &["version"], &tx);
+
+    if !docker_ok {
+        let _ = tx.blocking_send(InstallStep::error(
+            "verify-docker",
+            "Docker no responde. Puede que necesites reiniciar el sistema.",
+        ));
+    }
+
+    // ── 6. Instalar Docker Compose ────────────────────────────────────────────
+
+    // Verificar si el plugin moderno ya está disponible (exit code = criterio, no stdout).
+    let compose_already = std::process::Command::new("docker")
+        .args(["compose", "version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if compose_already {
+        let _ = tx.blocking_send(InstallStep::success(
+            "check-compose",
+            "Docker Compose plugin ya está disponible",
+        ));
+    } else {
+        // ── 6a. Intentar con apt (Debian/Ubuntu) ──────────────────────────────
+        // Verificamos el exit code del proceso, no el contenido de stdout/stderr.
+        let apt_ok = if is_debian {
+            run_step(
+                "install-compose-apt",
+                "apt-get",
+                &["install", "-y", "docker-compose-plugin"],
+                &tx,
+            )
+        } else {
+            false
+        };
+
+        if !apt_ok {
+            // ── 6b. Fallback: descarga binaria oficial ────────────────────────
+            let _ = tx.blocking_send(InstallStep::running(
+                "install-compose-binary",
+                "Instalando Docker Compose via binario oficial (GitHub releases)...",
             ));
 
-            let manual_install = std::process::Command::new("sh")
-                .arg("-c")
-                .arg("curl -SL https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose")
-                .output();
+            // Detectamos arquitectura para elegir el binario correcto.
+            let arch = std::process::Command::new("uname")
+                .arg("-m")
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_else(|_| "x86_64".to_string());
 
-            if let Ok(install_out) = manual_install {
-                if install_out.status.success() {
-                    let _ = output.blocking_send(InstallStep::success(
-                        "install-compose-manual",
-                        "Docker Compose instalado manualmente",
-                    ));
-                } else {
-                    let _ = output.blocking_send(InstallStep::error(
-                        "install-compose-manual",
-                        "Error al instalar Docker Compose manualmente",
+            // Mapeamos nombres de uname a los del release de GitHub.
+            let arch_name = match arch.as_str() {
+                "x86_64"         => "x86_64",
+                "aarch64"|"arm64" => "aarch64",
+                "armv7l"         => "armv7",
+                other            => other,
+            };
+
+            // Creamos el directorio del plugin si no existe.
+            let _ = std::fs::create_dir_all("/usr/local/lib/docker/cli-plugins");
+
+            let url = format!(
+                "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-{}",
+                arch_name
+            );
+            let dest = "/usr/local/lib/docker/cli-plugins/docker-compose";
+
+            // Descargamos con curl y seguimos redirects (-L).
+            let curl_ok = run_step(
+                "download-compose",
+                "curl",
+                &["-fsSL", &url, "-o", dest],
+                &tx,
+            );
+
+            if curl_ok {
+                // Damos permisos de ejecución.
+                run_step("chmod-compose", "chmod", &["+x", dest], &tx);
+
+                // Verificamos que el plugin funciona correctamente.
+                let verify_ok = run_step(
+                    "verify-compose",
+                    "docker",
+                    &["compose", "version"],
+                    &tx,
+                );
+
+                if !verify_ok {
+                    let _ = tx.blocking_send(InstallStep::error(
+                        "verify-compose",
+                        "Docker Compose no responde tras la instalación",
                     ));
                 }
+            } else {
+                let _ = tx.blocking_send(InstallStep::error(
+                    "install-compose-binary",
+                    "No se pudo descargar Docker Compose. Verifica la conexión a internet.",
+                ));
             }
         }
     }
 
-    // Final message
-    let _ = output.blocking_send(InstallStep::success(
+    // ── 7. Mensaje final ──────────────────────────────────────────────────────
+    let _ = tx.blocking_send(InstallStep::success(
         "complete",
-        "Proceso de instalación completado. Verifica los resultados arriba.",
+        "Proceso finalizado. Pulsa 'Verificar' para comprobar el estado.",
     ));
+
+    // `tx` se dropea aquí automáticamente, cerrando el canal y el stream SSE.
 }
 
-pub async fn install_docker() -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
-    let (tx, mut rx) = mpsc::channel::<InstallStep>(100);
-    let running = Arc::new(AtomicBool::new(true));
-    let running_clone = running.clone();
+/// Handler POST /system/install
+///
+/// Devuelve un stream SSE (text/event-stream) donde cada evento es un
+/// `InstallStep` serializado como JSON en el campo `data:`.
+///
+/// El cliente debe leer el stream línea a línea y parsear cada `data: {...}`.
+pub async fn install_docker(
+    State(_pool): State<SqlitePool>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    // Canal con buffer para 200 pasos; la instalación raramente supera 30.
+    let (tx, mut rx) = mpsc::channel::<InstallStep>(200);
 
-    // Run installation in blocking thread
-    std::thread::spawn(move || {
+    // Lanzamos la instalación en el thread pool de Tokio para tareas bloqueantes,
+    // evitando bloquear el executor async principal.
+    tokio::task::spawn_blocking(move || {
         install_docker_steps(tx);
-        running_clone.store(false, Ordering::SeqCst);
     });
 
+    // Convertimos el receptor del canal en un Stream SSE.
     let stream = async_stream::stream! {
         while let Some(step) = rx.recv().await {
-            yield Ok(Event::default().data(step.to_sse()));
+            // Serializamos el InstallStep a JSON.
+            // Si falla la serialización enviamos un mensaje de error legible.
+            let json = serde_json::to_string(&step)
+                .unwrap_or_else(|e| format!(r#"{{"error":"{}"}}"#, e));
+
+            yield Ok(Event::default().data(json));
         }
 
-        // Send final event
-        yield Ok(Event::default().data("event: done\n\n"));
+        // Evento especial "done" que indica que el stream terminó.
+        // El frontend puede usarlo para marcar la instalación como completada.
+        yield Ok(Event::default().event("done").data("{}"));
     };
 
-    Sse::new(stream)
+    // keep_alive envía comentarios `: ping` cada 15s para evitar timeouts de proxy.
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
