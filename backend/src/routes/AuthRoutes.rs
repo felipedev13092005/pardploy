@@ -4,7 +4,7 @@ use axum::{
     Router
 };
 use sqlx::SqlitePool;
-use crate::handlers::AuthHandlers::{register, login, me, refresh, logout, get_user_by_id};
+use crate::handlers::AuthHandlers::{register, login, me, refresh, logout, get_user_by_id, get_auth_status};
 use crate::middlewares::auth_middleware::mw_require_auth;
 
 pub fn auth_routes() -> Router<SqlitePool> {
@@ -12,7 +12,8 @@ pub fn auth_routes() -> Router<SqlitePool> {
     let public_routes = Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
-        .route("/refresh", post(refresh)); // El refresh suele usar su propia lógica de validación
+        .route("/refresh", post(refresh))
+        .route("/status", get(get_auth_status));
 
     // 2. Rutas Protegidas (Requieren Token válido)
     let protected_routes = Router::new()
