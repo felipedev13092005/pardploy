@@ -12,6 +12,7 @@ import PageMetrics from "./private/(MainLayout)/metrics/PageMetrics";
 import PageSecrets from "./private/(MainLayout)/secrets/PageSecrets";
 import PageSettings from "./private/(MainLayout)/settings/PageSettings";
 import { AuthGuard } from "@/shared/guards/AuthGuard";
+import { PublicGuard } from "@/shared/guards/PublicGuard";
 import MainProviders from "@/shared/providers/MainProviders";
 import PageLogin from "./public/PageLogin";
 import PageRegister from "./public/PageRegister";
@@ -49,12 +50,17 @@ export const router = createBrowserRouter([
         element: <PageRequirements />,
       },
       {
-        path: "/login",
-        element: <PageLogin />,
-      },
-      {
-        path: "/register",
-        element: <PageRegister />,
+        element: <PublicGuard />,
+        children: [
+          {
+            path: "/login",
+            element: <PageLogin />,
+          },
+          {
+            path: "/register",
+            element: <PageRegister />,
+          },
+        ],
       },
       {
         path: "/test",
