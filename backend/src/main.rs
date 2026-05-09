@@ -5,9 +5,9 @@ use std::env;
 use tower_http::cors::CorsLayer;
 
 pub mod db; 
-pub mod models { pub mod UserModel; }
-pub mod handlers { pub mod AuthHandlers; }
-pub mod routes { pub mod AuthRoutes; }
+pub mod models { pub mod UserModel; pub mod SystemModel; }
+pub mod handlers { pub mod AuthHandlers; pub mod SystemHandlers; }
+pub mod routes { pub mod AuthRoutes; pub mod SystemRoutes; }
 pub mod middlewares { pub mod auth_middleware; }
 
 #[tokio::main]
@@ -40,6 +40,7 @@ async fn main() {
     // --- APP ---
     let app = Router::new()
         .nest("/api/auth", routes::AuthRoutes::auth_routes())
+        .nest("/api", routes::SystemRoutes::system_routes())
         .fallback(|| async { "🦁 Pardploy Engine: Ruta no encontrada" })
         .layer(cors) // IMPORTANTE: El layer de CORS debe ir después de las rutas
         .with_state(pool);
