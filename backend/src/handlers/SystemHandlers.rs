@@ -13,14 +13,22 @@
 //   futures    = "0.3"    # Para join! y ejecutar checks en paralelo
 // ============================================================================
 
-use axum::{extract::State, Json};
+use axum::{
+    extract::State,
+    response::sse::{Event, Sse},
+    Json,
+};
 use bollard::Docker;
 // use futures::future::join_all;
+use futures::stream::Stream;
 use sysinfo::{Disks, System};
 use sqlx::SqlitePool;
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
-use crate::models::SystemModel::{SystemRequirement, SystemRequirementsResponse};
+use crate::models::SystemModel::{InstallStep, SystemRequirement, SystemRequirementsResponse};
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 
@@ -363,4 +371,212 @@ pub async fn get_requirements(
     };
 
     Json(response)
+}
+
+// ── Instalación de Docker ────────────────────────────────────────────────────
+
+fn run_command_with_output(
+    cmd: &str,
+    args: &[&str],
+    output: &mpsc::Sender<InstallStep>,
+) -> bool {
+    let cmd_str = format!("{} {}", cmd, args.join(" "));
+
+    let output_clone = output.clone();
+    let _ = output_clone.blocking_send(InstallStep::running(
+        cmd_str.clone(),
+        format!("Ejecutando: {}", cmd_str),
+    ));
+
+    let rt = tokio::runtime::Handle::current();
+    let result = rt.block_on(async {
+        tokio::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .await
+    });
+
+    match result {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+
+            if out.status.success() {
+                let output_clone = output.clone();
+                let _ = output_clone.blocking_send(InstallStep::success(
+                    cmd_str.clone(),
+                    if stdout.is_empty() {
+                        "Completado".to_string()
+                    } else {
+                        stdout
+                    },
+                ));
+                true
+            } else {
+                let output_clone = output.clone();
+                let _ = output_clone.blocking_send(InstallStep::error(
+                    cmd_str.clone(),
+                    if stderr.is_empty() {
+                        format!("Falló con código: {:?}", out.status.code())
+                    } else {
+                        stderr
+                    },
+                ));
+                false
+            }
+        }
+        Err(e) => {
+            let output_clone = output.clone();
+            let _ = output_clone.blocking_send(InstallStep::error(
+                cmd_str.clone(),
+                format!("Error al ejecutar: {}", e),
+            ));
+            false
+        }
+    }
+}
+
+fn install_docker_steps(output: mpsc::Sender<InstallStep>) {
+    let _ = output.blocking_send(InstallStep::running(
+        "detection",
+        "Detectando sistema operativo...",
+    ));
+
+    let os_info = std::fs::read_to_string("/etc/os-release")
+        .unwrap_or_default()
+        .to_lowercase();
+
+    let is_ubuntu = os_info.contains("ubuntu") || os_info.contains("debian");
+
+    let _ = output.blocking_send(InstallStep::success(
+        "detection",
+        format!("Sistema detectado: {}", if is_ubuntu { "Ubuntu/Debian" } else { "CentOS/Fedora" }),
+    ));
+
+    // Check if already installed
+    let _ = output.blocking_send(InstallStep::running(
+        "check-docker",
+        "Verificando si Docker ya está instalado...",
+    ));
+
+    let docker_check = std::process::Command::new("which")
+        .arg("docker")
+        .output();
+
+    if docker_check.map(|o| o.status.success()).unwrap_or(false) {
+        let _ = output.blocking_send(InstallStep::success(
+            "check-docker",
+            "Docker ya está instalado",
+        ));
+    } else {
+        let _ = output.blocking_send(InstallStep::running(
+            "install-docker",
+            "Instalando Docker (puede tomar varios minutos)...",
+        ));
+
+        // Try Docker's install script (works on most distros)
+        let script_result = std::process::Command::new("sh")
+            .arg("-c")
+            .arg("curl -fsSL https://get.docker.com | sh")
+            .output();
+
+        match script_result {
+            Ok(out) if out.status.success() => {
+                let _ = output.blocking_send(InstallStep::success(
+                    "install-docker",
+                    "Docker instalado correctamente",
+                ));
+            }
+            _ => {
+                // Fallback to package manager
+                let _ = output.blocking_send(InstallStep::running(
+                    "install-docker-fallback",
+                    "Intentando instalación por paquete...",
+                ));
+
+                let fallback_success = run_command_with_output(
+                    "apt-get",
+                    &["update", "-y"],
+                    &output,
+                );
+
+                if fallback_success {
+                    let _ = run_command_with_output(
+                        "apt-get",
+                        &["install", "-y", "docker.io"],
+                        &output,
+                    );
+                }
+            }
+        }
+    }
+
+    // Enable and start service
+    let _ = output.blocking_send(InstallStep::running(
+        "enable-docker",
+        "Habilitando servicio Docker...",
+    ));
+
+    run_command_with_output("systemctl", &["enable", "docker"], &output);
+
+    let _ = output.blocking_send(InstallStep::running(
+        "start-docker",
+        "Iniciando servicio Docker...",
+    ));
+
+    let start_ok = run_command_with_output("systemctl", &["start", "docker"], &output);
+
+    // Wait a moment for Docker to be ready
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // Verify installation
+    let _ = output.blocking_send(InstallStep::running(
+        "verify-docker",
+        "Verificando instalación de Docker...",
+    ));
+
+    let verify = std::process::Command::new("docker")
+        .arg("version")
+        .output();
+
+    if verify.map(|o| o.status.success()).unwrap_or(false) {
+        let _ = output.blocking_send(InstallStep::success(
+            "verify-docker",
+            "Docker instalado y funcionando correctamente",
+        ));
+    } else {
+        let _ = output.blocking_send(InstallStep::error(
+            "verify-docker",
+            "Docker no está respondiendo. Puede que necesite reiniciar el sistema.",
+        ));
+    }
+
+    // Final message
+    let _ = output.blocking_send(InstallStep::success(
+        "complete",
+        "Proceso de instalación completado. Verifica los resultados arriba.",
+    ));
+}
+
+pub async fn install_docker() -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let (tx, mut rx) = mpsc::channel::<InstallStep>(100);
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+
+    // Run installation in blocking thread
+    std::thread::spawn(move || {
+        install_docker_steps(tx);
+        running_clone.store(false, Ordering::SeqCst);
+    });
+
+    let stream = async_stream::stream! {
+        while let Some(step) = rx.recv().await {
+            yield Ok(Event::default().data(step.to_sse()));
+        }
+
+        // Send final event
+        yield Ok(Event::default().data("event: done\n\n"));
+    };
+
+    Sse::new(stream)
 }
