@@ -25,6 +25,7 @@ import {
   Database,
   Loader2,
   Settings,
+  X,
 } from "lucide-react"
 
 interface RequirementItemProps {
@@ -78,6 +79,8 @@ const PageRequirements = () => {
   const [hasCheckedOnce, setHasCheckedOnce] = useState(false)
   const [installSteps, setInstallSteps] = useState<InstallStep[]>([])
   const [isInstalling, setIsInstalling] = useState(false)
+  const [installComplete, setInstallComplete] = useState(false)
+  const [showTerminal, setShowTerminal] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -92,6 +95,8 @@ const PageRequirements = () => {
 
   const handleInstall = async () => {
     setIsInstalling(true)
+    setInstallComplete(false)
+    setShowTerminal(true)
     setInstallError(null)
     setInstallSteps([])
 
@@ -105,7 +110,12 @@ const PageRequirements = () => {
       )
     } finally {
       setIsInstalling(false)
+      setInstallComplete(true)
     }
+  }
+
+  const handleCloseTerminal = () => {
+    setShowTerminal(false)
   }
 
   useEffect(() => {
@@ -297,7 +307,7 @@ const PageRequirements = () => {
         </CardContent>
 
         <div className="p-6 pt-0 space-y-4">
-          {(isInstalling || installSteps.length > 0) && (
+          {(showTerminal || (installSteps.length > 0)) && (
             <div className="bg-zinc-950 rounded-lg p-4 font-mono text-sm">
               <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
                 <div className="flex gap-1.5">
@@ -310,6 +320,17 @@ const PageRequirements = () => {
                   <span className="ml-auto text-xs text-blue-400 animate-pulse">
                     Ejecutando...
                   </span>
+                )}
+                {installComplete && !isInstalling && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCloseTerminal}
+                    className="ml-auto text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 h-6 px-2"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Cerrar
+                  </Button>
                 )}
               </div>
 
