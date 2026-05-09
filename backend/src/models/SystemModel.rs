@@ -34,3 +34,43 @@ impl SystemRequirementsResponse {
             && self.port_5173.available.unwrap_or(false)
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InstallStep {
+    pub name: String,
+    pub status: String,
+    pub message: String,
+}
+
+impl InstallStep {
+    pub fn running(name: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: "running".to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn success(name: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: "success".to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn error(name: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: "error".to_string(),
+            message: message.into(),
+        }
+    }
+
+    pub fn to_sse(&self) -> String {
+        format!(
+            "data: {}\n\n",
+            serde_json::to_string(self).unwrap_or_default()
+        )
+    }
+}
