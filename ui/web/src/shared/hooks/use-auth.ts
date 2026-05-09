@@ -47,14 +47,14 @@ export const useSession = () => {
   });
 
   return {
-    caching,
     user,
-    loading: loading || caching, // Es loading si está consultando o refrescando en cache
-    session: isError ? false : (loading || caching) ? undefined : !!user,
+    caching,
+    loading,
+    session: isError ? false : loading ? undefined : !!user,
     login: loginMutation.mutateAsync,
     register: registerMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
     refresh: refreshMutation.mutateAsync,
-  };
+  }
 };
 

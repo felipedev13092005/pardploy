@@ -9,6 +9,7 @@ import { useSession } from '@/shared/hooks/use-auth'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -58,31 +59,34 @@ export const UserMenu = ({ name }: UserMenuProps) => {
       />
 
       <DropdownMenuContent align='end' className='w-48'>
-        <DropdownMenuLabel>
-          {name || 'Usuario'}
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            {name || 'Usuario'}
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          render={
-            <Link
-              to='/private/settings'
-              className='flex items-center gap-2 cursor-pointer w-full'
-            >
-              <Settings className='w-4 h-4' />
-              Configuración
-            </Link>
-          }
-        />
-
-        <DropdownMenuItem
-          onClick={logout}
-          className='flex items-center gap-2 text-red-600 focus:text-red-600 cursor-pointer'
-        >
-          <LogOut className='w-4 h-4' />
-          Cerrar sesión
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            render={
+              <Link
+                to='/private/settings'
+                className='flex items-center gap-2 cursor-pointer w-full'
+              >
+                <Settings className='w-4 h-4' />
+                Configuración
+              </Link>
+            }
+          />
+          <DropdownMenuItem
+            onClick={logout}
+            className='flex items-center gap-2 text-red-600 focus:text-red-600 cursor-pointer'
+          >
+            <LogOut className='w-4 h-4' />
+            Cerrar sesión
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

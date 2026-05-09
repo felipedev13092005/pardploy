@@ -8,6 +8,7 @@ import { useSidebar } from '@/shared/ui/components/ui/sidebar'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -62,38 +63,41 @@ export function SidebarUser() {
           </button>
         }
       />
-
       <DropdownMenuContent
         side='right'
         align='start'
         sideOffset={12}
         className='w-56'
       >
-        <DropdownMenuLabel className='flex flex-col space-y-1'>
-          <span className='text-sm font-medium'>{user?.username}</span>
-        </DropdownMenuLabel>
+        {/* ✅ Label envuelto en Group */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className='flex flex-col space-y-1'>
+            <span className='text-sm font-medium'>{user?.username}</span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          render={
-            <Link
-              to='/private/settings'
-              className='flex items-center gap-2 cursor-pointer w-full'
-            >
-              <Settings className='w-4 h-4' />
-              Configuración
-            </Link>
-          }
-        />
-
-        <DropdownMenuItem
-          onClick={logout}
-          className='flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600'
-        >
-          <LogOut className='w-4 h-4 text-red-600' />
-          Cerrar sesión
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            render={
+              <Link
+                to='/private/settings'
+                className='flex items-center gap-2 cursor-pointer w-full'
+              >
+                <Settings className='w-4 h-4' />
+                Configuración
+              </Link>
+            }
+          />
+          <DropdownMenuItem
+            onClick={logout}
+            className='flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600'
+          >
+            <LogOut className='w-4 h-4 text-red-600' />
+            Cerrar sesión
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

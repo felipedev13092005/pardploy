@@ -1,16 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Outlet } from "react-router"
-import { SidebarProvider } from "../ui/components/ui/sidebar"
 
-// Create a client
+// ✅ Fuera del componente → se crea una sola vez
 const queryClient = new QueryClient()
+
 const MainProviders = () => {
   return (
-    <SidebarProvider>
-      <QueryClientProvider client={queryClient}>
-        <Outlet />;
-      </QueryClientProvider>
-    </SidebarProvider>
+    // ✅ QueryClientProvider por fuera, SidebarProvider por dentro
+    <QueryClientProvider client={queryClient}>
+      <Outlet />
+    </QueryClientProvider>
   )
 }
 
