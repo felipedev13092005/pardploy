@@ -5,6 +5,7 @@ import { AuthGuard } from "@/shared/guards/AuthGuard";
 import MainProviders from "@/shared/providers/MainProviders";
 import PageLogin from "./public/PageLogin";
 import PageRegister from "./public/PageRegister";
+import PageNotFound from "./public/PageNotFound";
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +37,10 @@ export const router = createBrowserRouter([
       {
         path: "/test",
         element: <div>Hello World</div>,
+      },
+      {
+        path: "*",
+        element: <PageNotFound />,
       },
     ]
   },
