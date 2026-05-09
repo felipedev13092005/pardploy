@@ -15,6 +15,7 @@ import { AuthGuard } from "@/shared/guards/AuthGuard";
 import MainProviders from "@/shared/providers/MainProviders";
 import PageLogin from "./public/PageLogin";
 import PageRegister from "./public/PageRegister";
+import PageRequirements from "./public/PageRequirements";
 import PageNotFound from "./public/PageNotFound";
 
 export const router = createBrowserRouter([
@@ -42,6 +43,10 @@ export const router = createBrowserRouter([
             ],
           },
         ],
+      },
+      {
+        path: "/requirements",
+        element: <PageRequirements />,
       },
       {
         path: "/login",
