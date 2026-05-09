@@ -37,8 +37,11 @@ export const useSession = () => {
   // -------- POST /auth/logout --------
   const logoutMutation = useMutation({
     mutationFn: () => AuthService.logout(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["session"] }),
-  });
+    onSuccess: () => {
+      queryClient.setQueryData(['session'], null)  // 👈 no refetchea, limpia directo
+      queryClient.clear()                          // limpia todo el cache
+    },
+  })
 
   // -------- POST /auth/refresh --------
   const refreshMutation = useMutation({
@@ -51,10 +54,10 @@ export const useSession = () => {
     caching,
     loading,
     session: isError ? false : loading ? undefined : !!user,
-    login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync,
-    refresh: refreshMutation.mutateAsync,
+    login: loginMutation.mutate,
+    register: registerMutation.mutate,
+    logout: logoutMutation.mutate,
+    refresh: refreshMutation.mutate,
   }
 };
 

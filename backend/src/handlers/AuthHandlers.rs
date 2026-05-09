@@ -6,7 +6,7 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, SameSite, CookieJar};
 use sqlx::SqlitePool;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use jsonwebtoken::{encode, Header, EncodingKey};
+use jsonwebtoken::{encode, decode, Header, EncodingKey, DecodingKey, Validation};
 use serde::{Serialize, Deserialize};
 use validator::Validate;
 use crate::models::UserModel::User;
@@ -15,8 +15,8 @@ use std::env;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: i32,      // User ID
-    pub name: String,   // Username
+    pub sub: i32,
+    pub name: String,
     pub exp: usize,
     pub iat: usize,
 }
@@ -37,7 +37,6 @@ fn get_refresh_secret() -> Vec<u8> {
     env::var("REFRESH_SECRET").expect("REFRESH_SECRET no definido").into_bytes()
 }
 
-// Función actualizada para aceptar name
 fn create_token(user_id: i32, username: &str, secret: &[u8], seconds_to_exp: u64) -> String {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     let claims = Claims {
@@ -69,7 +68,7 @@ pub async fn register(
         .map_err(|_| (StatusCode::CONFLICT, "El nombre de usuario ya está en uso".into()))?;
 
     Ok((
-        StatusCode::CREATED, 
+        StatusCode::CREATED,
         Json(serde_json::json!({ "message": "Usuario registrado exitosamente", "username": payload.username }))
     ))
 }
@@ -87,7 +86,7 @@ pub async fn login(
     }
 
     let user_id = user.id.unwrap_or(0);
-    
+
     let access_token = create_token(user_id, &user.username, &get_jwt_secret(), 900);
     let refresh_token = create_token(user_id, &user.username, &get_refresh_secret(), 604800);
 
@@ -98,16 +97,15 @@ pub async fn login(
         .build();
 
     let refresh_cookie = Cookie::build(("refresh_token", refresh_token))
-        .path("/api/auth/refresh")
+        .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
         .build();
 
-    // Actualizamos el jar y devolvemos el JSON
     let new_jar = jar.add(access_cookie).add(refresh_cookie);
-    
+
     Ok((
-        new_jar, 
+        new_jar,
         Json(serde_json::json!({
             "message": "Login exitoso",
             "user": {
@@ -118,43 +116,56 @@ pub async fn login(
     ))
 }
 
-// Ejemplo de cómo usar los datos en el endpoint 'me'
 pub async fn me(
     axum::Extension(claims): axum::Extension<Claims>,
 ) -> Json<serde_json::Value> {
-    // Ahora 'me' recibe los datos directamente del token sin consultar la DB
-    Json(serde_json::Value::from(serde_json::json!({
+    Json(serde_json::json!({
         "id": claims.sub,
         "username": claims.name,
         "status": "authenticated"
-    })))
+    }))
 }
 
-pub async fn logout(jar: CookieJar) -> (CookieJar, StatusCode) {
-    let new_jar = jar
-        .remove(Cookie::from("access_token"))
-        .remove(Cookie::from("refresh_token"));
-    (new_jar, StatusCode::OK)
+pub async fn logout(jar: CookieJar) -> (CookieJar, (StatusCode, Json<serde_json::Value>)) {
+    let access = Cookie::build(("access_token", "")).path("/").build();
+    let refresh = Cookie::build(("refresh_token", "")).path("/").build();
+    let new_jar = jar.remove(access).remove(refresh);
+    (new_jar, (StatusCode::OK, Json(serde_json::json!({ "message": "Sesión cerrada exitosamente" }))))
 }
 
-pub async fn refresh(jar: CookieJar) -> Result<(CookieJar, StatusCode), (StatusCode, String)> {
-    let _refresh_token = jar.get("refresh_token")
+pub async fn refresh(jar: CookieJar) -> Result<(CookieJar, (StatusCode, Json<serde_json::Value>)), (StatusCode, Json<serde_json::Value>)> {
+    let err = |msg: &str| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": msg })));
+
+    let refresh_token = jar
+        .get("refresh_token")
         .map(|c| c.value().to_string())
-        .ok_or((StatusCode::UNAUTHORIZED, "No hay refresh token".into()))?;
+        .ok_or_else(|| err("No hay refresh token"))?;
 
-    // Nota: En una app real, aquí validarías el refresh_token y obtendrías el user_id/name
-    let new_access_token = create_token(0, "user_refreshed", &get_jwt_secret(), 900);
+    let token_data = decode::<Claims>(
+        &refresh_token,
+        &DecodingKey::from_secret(&get_refresh_secret()),
+        &Validation::default(),
+    )
+    .map_err(|_| err("Refresh token inválido o expirado"))?;
+
+    let claims = token_data.claims;
+
+    let new_access_token = create_token(claims.sub, &claims.name, &get_jwt_secret(), 900);
 
     let access_cookie = Cookie::build(("access_token", new_access_token))
         .path("/")
         .http_only(true)
+        .same_site(SameSite::Lax)
         .build();
 
-    Ok((jar.add(access_cookie), StatusCode::OK))
+    Ok((
+        jar.add(access_cookie),
+        (StatusCode::OK, Json(serde_json::json!({ "message": "Token renovado exitosamente" })))
+    ))
 }
 
 pub async fn get_user_by_id(
-    State(pool): State<SqlitePool>, 
+    State(pool): State<SqlitePool>,
     Path(id): Path<i32>
 ) -> Result<Json<User>, StatusCode> {
     match User::find_by_id(&pool, id).await {

@@ -3,7 +3,6 @@
 import { LogOut, Settings } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { AuthService } from '@/shared/utils/auth'
 import { useSession } from '@/shared/hooks/use-auth'
 
 import {
@@ -29,11 +28,10 @@ interface UserMenuProps {
 }
 
 export const UserMenu = ({ name }: UserMenuProps) => {
-  const { user } = useSession()
+  const { user, logout } = useSession()
 
-  const logout = async () => {
-    await AuthService.logout()
-    window.location.href = '/'
+  const handleLogout = async () => {
+    logout()
   }
 
   return (
@@ -80,7 +78,7 @@ export const UserMenu = ({ name }: UserMenuProps) => {
             }
           />
           <DropdownMenuItem
-            onClick={logout}
+            onClick={handleLogout}
             className='flex items-center gap-2 text-red-600 focus:text-red-600 cursor-pointer'
           >
             <LogOut className='w-4 h-4' />
