@@ -11,18 +11,20 @@ import {
 
 import { Link, useLocation } from 'react-router'
 
-const labelTraslate = {
+const labelTranslate = {
   dashboard: 'Panel',
-  products: 'Productos',
-  categories: 'Categorias',
-  inventory: 'Inventario',
-  edit: 'Editar',
-  warehouse: 'Bodega',
-  areas: 'Zonas',
-  tables: 'Mesas',
-  orders: 'Pedidos',
-  events: 'Eventos',
+  projects: 'Proyectos',
+  containers: 'Contenedores',
+  servers: 'Servidores',
+  networks: 'Redes',
+  volumes: 'Volúmenes',
+  deployments: 'Despliegues',
+  logs: 'Logs',
+  metrics: 'Métricas',
+  secrets: 'Secretos',
+  settings: 'Configuración',
   new: 'Nuevo',
+  edit: 'Editar',
 }
 
 export function BreadcrumbNav() {
@@ -51,7 +53,7 @@ export function BreadcrumbNav() {
             segment.slice(1).replace(/-/g, ' ')
 
           const text = !isUuid(segment)
-            ? labelTraslate[segment as keyof typeof labelTraslate] || label
+            ? labelTranslate[segment as keyof typeof labelTranslate] || label
             : 'Detalle'
 
           return (
