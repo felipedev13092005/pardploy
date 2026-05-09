@@ -173,3 +173,16 @@ pub async fn get_user_by_id(
         Err(_) => Err(StatusCode::NOT_FOUND),
     }
 }
+
+pub async fn get_auth_status(
+    State(pool): State<SqlitePool>,
+) -> Json<serde_json::Value> {
+    let has_users = User::find_all(&pool)
+        .await
+        .map(|users| !users.is_empty())
+        .unwrap_or(false);
+
+    Json(serde_json::json!({
+        "hasUsers": has_users
+    }))
+}
