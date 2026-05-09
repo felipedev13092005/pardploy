@@ -551,6 +551,52 @@ fn install_docker_steps(output: mpsc::Sender<InstallStep>) {
         ));
     }
 
+    // Install Docker Compose plugin
+    let _ = output.blocking_send(InstallStep::running(
+        "install-compose",
+        "Instalando Docker Compose plugin...",
+    ));
+
+    // Try apt-get first (Debian/Ubuntu)
+    let compose_install = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("apt-get update -y && apt-get install -y docker-compose-plugin 2>/dev/null || echo 'apt-fallback'")
+        .output();
+
+    if let Ok(out) = compose_install {
+        if out.status.success() && String::from_utf8_lossy(&out.stdout).contains("docker-compose-plugin") {
+            let _ = output.blocking_send(InstallStep::success(
+                "install-compose",
+                "Docker Compose plugin instalado correctamente",
+            ));
+        } else {
+            // Fallback: manual installation
+            let _ = output.blocking_send(InstallStep::running(
+                "install-compose-manual",
+                "Instalando Docker Compose manualmente...",
+            ));
+
+            let manual_install = std::process::Command::new("sh")
+                .arg("-c")
+                .arg("curl -SL https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose")
+                .output();
+
+            if let Ok(install_out) = manual_install {
+                if install_out.status.success() {
+                    let _ = output.blocking_send(InstallStep::success(
+                        "install-compose-manual",
+                        "Docker Compose instalado manualmente",
+                    ));
+                } else {
+                    let _ = output.blocking_send(InstallStep::error(
+                        "install-compose-manual",
+                        "Error al instalar Docker Compose manualmente",
+                    ));
+                }
+            }
+        }
+    }
+
     // Final message
     let _ = output.blocking_send(InstallStep::success(
         "complete",
