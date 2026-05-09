@@ -79,3 +79,10 @@ This document defines the golden rules and technical standards for any AI agent 
       ├── ui/          # shadcn components
       ├── providers/   # Context providers
       └── guards/      # Route guards
+
+## 9. Development Environment
+* **Container Execution:** All build commands, linting, type checking, and development tasks **MUST** be executed inside the Docker container using:
+  ```bash
+  docker exec -it pardploy_dev bash
+  ```
+* Never run build commands (cargo build, bun install, npm run build, etc.) directly on the host machine. Always exec into the container first.
