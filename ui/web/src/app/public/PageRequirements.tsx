@@ -122,8 +122,7 @@ const PageRequirements = () => {
         data.docker.ready &&
         data.compose.installed &&
         data.daemon.running &&
-        data.port_3000.available &&
-        data.port_5173.available
+        data.port_3000.available
 
       if (allReady) {
         navigate("/login")
@@ -132,17 +131,22 @@ const PageRequirements = () => {
   }, [data, hasCheckedOnce, navigate])
 
   const getStatus = (req: {
+    running?: boolean | null
+    ready?: boolean | null
+    available?: boolean | null
+    sufficient?: boolean | null
     installed?: boolean
-    ready?: boolean
-    running?: boolean
-    available?: boolean
-    sufficient?: boolean
   }): "success" | "error" | "warning" => {
-    if (req.running !== undefined) return req.running ? "success" : "error"
-    if (req.ready !== undefined) return req.ready ? "success" : "error"
-    if (req.available !== undefined) return req.available ? "success" : "error"
-    if (req.sufficient !== undefined) return req.sufficient ? "success" : "warning"
-    if (req.installed !== undefined) return req.installed ? "success" : "error"
+    if (req.running === true) return "success"
+    if (req.running === false) return "error"
+    if (req.ready === true) return "success"
+    if (req.ready === false) return "error"
+    if (req.available === true) return "success"
+    if (req.available === false) return "error"
+    if (req.sufficient === true) return "success"
+    if (req.sufficient === false) return "warning"
+    if (req.installed === true) return "success"
+    if (req.installed === false) return "error"
     return "warning"
   }
 
@@ -184,10 +188,12 @@ const PageRequirements = () => {
         },
         {
           icon: <Network className="h-6 w-6 text-zinc-600 dark:text-zinc-400" />,
-          title: "Puerto 5173",
-          description: "Puerto para el frontend",
-          status: getStatus(data.port_5173),
-          details: data.port_5173.error || undefined,
+          title: "Puerto 5173 (Frontend)",
+          description: "Puerto del frontend de Pardploy",
+          status: data.port_5173.available ? "success" : "warning",
+          details: data.port_5173.available 
+            ? "Disponible" 
+            : "En uso por el frontend (esto es normal)",
         },
         {
           icon: <Cpu className="h-6 w-6 text-zinc-600 dark:text-zinc-400" />,
