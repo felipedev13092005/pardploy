@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { SystemService } from "@/shared/utils/system"
@@ -18,15 +18,14 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
-  Terminal,
+  Terminal as TerminalIcon,
   HardDrive,
   Cpu,
   Network,
   Database,
-  Loader2,
   Settings,
-  X,
 } from "lucide-react"
+import Terminal, { useTerminalSteps } from "@/shared/ui/components/customs/Terminal"
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -74,33 +73,6 @@ const RequirementItem = ({
   )
 }
 
-// ── Componente de paso de instalación en el terminal ──────────────────────────
-
-const InstallStepRow = ({ step }: { step: InstallStep }) => {
-  const icon: Record<InstallStep["status"], React.ReactNode> = {
-    running: <Loader2 className="h-4 w-4 animate-spin text-blue-400  shrink-0" />,
-    success: <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />,
-    error: <XCircle className="h-4 w-4 text-red-400   shrink-0" />,
-  }
-
-  const color: Record<InstallStep["status"], string> = {
-    running: "text-blue-400",
-    success: "text-green-400",
-    error: "text-red-400",
-  }
-
-  return (
-    <div className="flex items-start gap-2">
-      <div className="mt-0.5">{icon[step.status]}</div>
-      <div className="flex-1 min-w-0">
-        <span className={`${color[step.status]} font-semibold`}>{step.name}</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-zinc-300 break-words">{step.message}</span>
-      </div>
-    </div>
-  )
-}
-
 // ── Página principal ──────────────────────────────────────────────────────────
 
 const PageRequirements = () => {
@@ -110,14 +82,11 @@ const PageRequirements = () => {
   const [hasCheckedOnce, setHasCheckedOnce] = useState(false)
 
   // Estado del terminal de instalación.
-  const [installSteps, setInstallSteps] = useState<InstallStep[]>([])
+  const { steps, push, reset } = useTerminalSteps()
   const [isInstalling, setIsInstalling] = useState(false)
   const [installComplete, setInstallComplete] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
-
-  // Ref para el scroll automático del terminal.
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   // ── Query de requisitos ────────────────────────────────────────────────────
 
@@ -151,14 +120,6 @@ const PageRequirements = () => {
     }
   }, [data, hasCheckedOnce, navigate])
 
-  // ── Auto-scroll del terminal ───────────────────────────────────────────────
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [installSteps])
-
   // ── Handler de instalación ────────────────────────────────────────────────
 
   const handleInstall = async () => {
@@ -166,22 +127,11 @@ const PageRequirements = () => {
     setInstallComplete(false)
     setShowTerminal(true)
     setInstallError(null)
-    setInstallSteps([])
+    reset()
 
     try {
-      // SystemService.installDocker lee el stream SSE del backend y llama
-      // al callback por cada InstallStep recibido en tiempo real.
       await SystemService.installDocker((step) => {
-        setInstallSteps((prev) => {
-          // Si el último paso tiene el mismo nombre y estaba en "running",
-          // lo reemplazamos por el paso actualizado (success/error) en vez
-          // de agregar una línea duplicada.
-          const last = prev[prev.length - 1]
-          if (last && last.name === step.name && last.status === "running") {
-            return [...prev.slice(0, -1), step]
-          }
-          return [...prev, step]
-        })
+        push(step)
       })
     } catch (error) {
       setInstallError(
@@ -298,7 +248,7 @@ const PageRequirements = () => {
         {/* ── Cabecera ─────────────────────────────────────────────────────── */}
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Terminal className="h-6 w-6" />
+            <TerminalIcon className="h-6 w-6" />
             Requisitos del Sistema
           </CardTitle>
           <CardDescription>
@@ -371,55 +321,15 @@ const PageRequirements = () => {
         <div className="p-6 pt-0 space-y-4">
 
           {/* Terminal de instalación */}
-          {(showTerminal || installSteps.length > 0) && (
-            <div className="bg-zinc-950 rounded-lg p-4 font-mono text-sm border border-zinc-800">
-
-              {/* Barra del terminal */}
-              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                </div>
-                <span className="text-zinc-500 text-xs ml-2 select-none">
-                  Terminal de instalación
-                </span>
-                <div className="ml-auto flex items-center gap-2">
-                  {isInstalling && (
-                    <span className="text-xs text-blue-400 animate-pulse">
-                      Ejecutando...
-                    </span>
-                  )}
-                  {installComplete && !isInstalling && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowTerminal(false)}
-                      className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 h-6 px-2"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Cerrar
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Pasos */}
-              <div
-                ref={scrollRef}
-                className="space-y-2 max-h-52 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent"
-              >
-                {installSteps.length === 0 && isInstalling && (
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Iniciando instalación...</span>
-                  </div>
-                )}
-                {installSteps.map((step, index) => (
-                  <InstallStepRow key={index} step={step} />
-                ))}
-              </div>
-            </div>
+          {(showTerminal || steps.length > 0) && (
+            <Terminal
+              title="Terminal de instalación"
+              steps={steps}
+              isRunning={isInstalling}
+              onClose={installComplete && !isInstalling ? () => setShowTerminal(false) : undefined}
+              maxHeight="max-h-52"
+              expandable
+            />
           )}
 
           {/* Banner de error de instalación */}
