@@ -1,93 +1,105 @@
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton } from '@/shared/ui/components/ui/sidebar'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+} from '@/shared/ui/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/components/ui/tooltip'
-import { Armchair, Boxes, Calendar, History, LayoutDashboard, LayoutGrid, MapPin, Package, Tags } from 'lucide-react'
+import {
+  Activity,
+  Container,
+  FolderKanban,
+  GitBranch,
+  HardDrive,
+  KeyRound,
+  LayoutDashboard,
+  Network,
+  ScrollText,
+  Server,
+  Settings,
+} from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { SidebarUser } from './SidebarUser'
 
-const items = [
+const groups = [
   {
-    title: 'Dashboard',
-    url: '/private/dashboard',
-    icon: LayoutDashboard,
+    label: 'General',
+    items: [
+      { title: 'Dashboard', url: '/private/dashboard', icon: LayoutDashboard },
+      { title: 'Proyectos', url: '/private/projects', icon: FolderKanban },
+    ],
   },
   {
-    title: 'Categorias',
-    url: '/private/categories',
-    icon: Tags,
+    label: 'Infraestructura',
+    items: [
+      { title: 'Contenedores', url: '/private/containers', icon: Container },
+      { title: 'Servidores', url: '/private/servers', icon: Server },
+      { title: 'Redes', url: '/private/networks', icon: Network },
+      { title: 'Volúmenes', url: '/private/volumes', icon: HardDrive },
+    ],
   },
   {
-    title: 'Productos',
-    url: '/private/products',
-    icon: Package,
+    label: 'Operaciones',
+    items: [
+      { title: 'Despliegues', url: '/private/deployments', icon: GitBranch },
+      { title: 'Logs', url: '/private/logs', icon: ScrollText },
+      { title: 'Métricas', url: '/private/metrics', icon: Activity },
+    ],
   },
   {
-    title: 'Inventario',
-    url: '/private/inventory',
-    icon: Boxes,
-  },
-  {
-    title: 'Transacciones',
-    url: '/private/transactions',
-    icon: History,
-  },
-  {
-    title: 'Zonas',
-    url: '/private/areas',
-    icon: MapPin,
-  },
-  {
-    title: 'Mesas',
-    url: '/private/tables',
-    icon: Armchair,
-  },
-  {
-    title: 'Pedidos',
-    url: '/private/orders',
-    icon: LayoutGrid,
-  },
-  {
-    title: 'Eventos',
-    url: '/private/events',
-    icon: Calendar,
+    label: 'Sistema',
+    items: [
+      { title: 'Secretos', url: '/private/secrets', icon: KeyRound },
+      { title: 'Configuración', url: '/private/settings', icon: Settings },
+    ],
   },
 ]
+
 const SidebarAdmin = () => {
   const { pathname } = useLocation()
+
   return (
     <Sidebar collapsible='icon'>
       <SidebarHeader>
         <div className='flex items-center justify-center py-2'>
           <Link to={'/private/dashboard'}>
-            <h3 className='text-2xl font-bold'>Panel</h3>
+            <h3 className='text-2xl font-bold'>Pardploy</h3>
           </Link>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Application</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <Tooltip key={item.url}>
-                  <TooltipTrigger
-                    render={
-                      <SidebarMenuButton isActive={pathname === item.url}>
-                        <Link to={item.url} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    }
-                  />
-                  <TooltipContent side="right">
-                    <span>{item.title}</span>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {groups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <Tooltip key={item.url}>
+                    <TooltipTrigger
+                      render={
+                        <SidebarMenuButton isActive={pathname === item.url}>
+                          <Link to={item.url} className='flex items-center gap-2'>
+                            <item.icon className='h-4 w-4' />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      }
+                    />
+                    <TooltipContent side='right'>
+                      <span>{item.title}</span>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter>
