@@ -19,3 +19,9 @@ export interface SystemRequirementsResponse {
   memory: SystemRequirement
   disk: SystemRequirement
 }
+
+export interface InstallStep {
+  name: string
+  status: "running" | "success" | "error"
+  message: string
+}
