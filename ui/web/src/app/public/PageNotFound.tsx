@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Button } from "@/shared/ui/components/ui/button";
+import { buttonVariants } from "@/shared/ui/components/ui/button";
 import { Home, TriangleAlert } from "lucide-react";
 
 export default function PageNotFound() {
@@ -14,12 +14,13 @@ export default function PageNotFound() {
           La página que buscas no existe o ha sido movida.
         </p>
         <div className="flex justify-center gap-4">
-          <Button asChild>
-            <Link to="/">
-              <Home className="mr-2 h-4 w-4" />
-              Volver al inicio
-            </Link>
-          </Button>
+          <Link
+            to="/"
+            className={buttonVariants({ variant: "default", size: "default" })}
+          >
+            <Home className="mr-2 h-4 w-4" />
+            Volver al inicio
+          </Link>
         </div>
       </div>
     </div>

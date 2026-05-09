@@ -30,32 +30,32 @@ const groups = [
   {
     label: 'General',
     items: [
-      { title: 'Dashboard', url: '/private/dashboard', icon: LayoutDashboard },
-      { title: 'Proyectos', url: '/private/projects', icon: FolderKanban },
+      { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+      { title: 'Proyectos', url: '/projects', icon: FolderKanban },
     ],
   },
   {
     label: 'Infraestructura',
     items: [
-      { title: 'Contenedores', url: '/private/containers', icon: Container },
-      { title: 'Servidores', url: '/private/servers', icon: Server },
-      { title: 'Redes', url: '/private/networks', icon: Network },
-      { title: 'Volúmenes', url: '/private/volumes', icon: HardDrive },
+      { title: 'Contenedores', url: '/containers', icon: Container },
+      { title: 'Servidores', url: '/servers', icon: Server },
+      { title: 'Redes', url: '/networks', icon: Network },
+      { title: 'Volúmenes', url: '/volumes', icon: HardDrive },
     ],
   },
   {
     label: 'Operaciones',
     items: [
-      { title: 'Despliegues', url: '/private/deployments', icon: GitBranch },
-      { title: 'Logs', url: '/private/logs', icon: ScrollText },
-      { title: 'Métricas', url: '/private/metrics', icon: Activity },
+      { title: 'Despliegues', url: '/deployments', icon: GitBranch },
+      { title: 'Logs', url: '/logs', icon: ScrollText },
+      { title: 'Métricas', url: '/metrics', icon: Activity },
     ],
   },
   {
     label: 'Sistema',
     items: [
-      { title: 'Secretos', url: '/private/secrets', icon: KeyRound },
-      { title: 'Configuración', url: '/private/settings', icon: Settings },
+      { title: 'Secretos', url: '/secrets', icon: KeyRound },
+      { title: 'Configuración', url: '/settings', icon: Settings },
     ],
   },
 ]
@@ -67,7 +67,7 @@ const SidebarAdmin = () => {
     <Sidebar collapsible='icon'>
       <SidebarHeader>
         <div className='flex items-center justify-center py-2'>
-          <Link to={'/private/dashboard'}>
+          <Link to={'//dashboard'}>
             <h3 className='text-2xl font-bold'>Pardploy</h3>
           </Link>
         </div>

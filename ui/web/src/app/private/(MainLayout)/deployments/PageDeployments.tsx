@@ -1,0 +1,15 @@
+import { GitBranch } from "lucide-react";
+
+export default function PageDeployments() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <GitBranch className="h-8 w-8" />
+        <h1 className="text-3xl font-bold">Despliegues</h1>
+      </div>
+      <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
+        Despliegues - En desarrollo
+      </div>
+    </div>
+  );
+}

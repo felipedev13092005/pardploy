@@ -1,0 +1,15 @@
+import { FolderKanban } from "lucide-react";
+
+export default function PageProjects() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <FolderKanban className="h-8 w-8" />
+        <h1 className="text-3xl font-bold">Proyectos</h1>
+      </div>
+      <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
+        Proyectos - En desarrollo
+      </div>
+    </div>
+  );
+}
